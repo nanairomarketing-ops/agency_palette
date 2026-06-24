@@ -1,4 +1,4 @@
-// api/apichat.js (エラーハンドリング完全修正版)
+// api/apichat.js (JSONパース防御力を限界突破させた最終版)
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 親が回答した5つの指標の選択肢データと、それぞれの深掘り対話（自由記述ログ）をもとに、文脈を深く読み解き、「エージェンシーパレット」の最終スコア（各100点満点）と、あたたかいフィードバックを生成してください。
 
 【最重要：育児のリアルを読み解く補正ロジック】
-・「⑤ 環境のデザイン（黒子インデックス）」について：
+・「⑤ 環境のデザイン」について：
   親の選択肢がプッシュ型コントロール（0点）であっても、自由記述で『子どもが結果的にドハマりした、きらっと輝いた』という事実があれば、それは親の押しつけではなく最高の「セレンディピティ（偶然の出会い）」を誘発したとみなし、数値を【80〜100点】へと大幅にポジティブ上方補正してください。
 ・「② 没頭」について：
   『すぐページをめくってしまう』などの行動があり初期値が低くても、それが「その子なりの新しい没頭・探索の形」であると親がつぶやきの中で気づけていれば、ポジティブに数値を補正してください。
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
 ・親の自由記述ログ: ${JSON.stringify(freeTexts)}
 
 【出力フォーマット】
-必ず以下の純粋なJSONフォーマットのみで返却してください。余計な文字や説明文、\`\`\`json などのマークダウンは絶対に含めないでください。
+必ず以下の純粋なJSONフォーマットのみで返却してください。余計なマークダウン（\`\`\`jsonなど）や説明の文章は絶対に含めないでください。
 {
   "scores": { "s1": 85, "s2": 90, "s3": 60, "s4": 95, "s5": 80 },
   "commentary": "（ここに親御さんへのあたたかいメッセージを記述）"
@@ -64,15 +64,23 @@ export default async function handler(req, res) {
         }
 
         let text = data.candidates[0].content.parts[0].text.trim();
-        text = text.replace(/^```json/, '').replace(/```$/, '').trim();
+        
+        // --- 強力なJSON抽出ロジック（ここを強化しました！） ---
+        // もし文字列の中に { と } があれば、その間だけを無理やり切り出す
+        const startIdx = text.indexOf('{');
+        const endIdx = text.lastIndexOf('}');
+        if (startIdx !== -1 && endIdx !== -1) {
+          text = text.substring(startIdx, endIdx + 1);
+        }
+
         const resultJson = JSON.parse(text);
         return res.status(200).json(resultJson);
 
       } catch (finalError) {
-        // パレット生成でエラーが起きた場合の専用フォールバック（画面の真っ白を防ぐ）
+        // デバッグ用にエラーメッセージをフィードバックに混ぜて原因を特定しやすくする
         return res.status(200).json({
-          scores: { "s1": 70, "s2": 70, "s3": 70, "s4": 70, "s5": 70 },
-          commentary: "今週も一日お疲れ様でした。親子のあたたかい対話ログは裏側で大切に預かっています✨（AIのデータパースで少し微調整が発生したため、今回はフラットなパレットでお届けしています。お子さんの日々のきらめきは独自の彩りで育まれていますので、どうぞそのまま見守ってあげてくださいね！）"
+          scores: { "s1": 75, "s2": 75, "s3": 75, "s4": 75, "s5": 75 },
+          commentary: `親子のあたたかい対話ログは裏側で大切に預かっています✨（AIのインク生成で少し微調整が発生したため、今回はフラットなパレットでお届けしています。お子さんの日々のきらめきは独自の彩りで育まれていますので、どうぞそのまま見守ってあげてくださいね！）\n\n※開発用エラーメモ: ${finalError.message}`
         });
       }
     }
