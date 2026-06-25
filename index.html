@@ -217,6 +217,9 @@ function handleChoice(choice) {
 }
 
 async function safeFetch(payload) {
+  // デバッグ用ログ：送信データを可視化
+  console.log("🚀【通信送信ログ】サーバーへ送るデータ:", JSON.stringify(payload, null, 2));
+  
   const paths = ['/api/apichat', '/api/apichat.js'];
   for (const path of paths) {
     try {
@@ -225,8 +228,14 @@ async function safeFetch(payload) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (res.ok) return await res.json();
-    } catch (e) {}
+      if (res.ok) {
+        const resData = await res.json();
+        console.log("✅【通信受信ログ】サーバーから返ってきたデータ:", JSON.stringify(resData, null, 2));
+        return resData;
+      }
+    } catch (e) {
+      console.error("⚠️通信エラー発生パス: " + path, e);
+    }
   }
   throw new Error("Fetch failed");
 }
@@ -239,8 +248,9 @@ async function nextStep() {
   }
 
   const step = FLOW[flowIdx];
+  console.log(`🏃‍♂️【現在の進行位置】FLOWインデックス: ${flowIdx}, ステップキー: ${step.key}, タイプ: ${step.type}, サブステップ: ${subStep}`);
+
   if (step.type === 'choice') {
-    // 選択肢のときはサーバー通信を挟まず、一瞬で次の質問を出す（リズム重視！）
     showBotMessage(step.bot);
     showChoices(step.choices);
   } else if (step.type === 'freetext') {
@@ -250,6 +260,7 @@ async function nextStep() {
       removeLoading();
 
       if (data && data.skip) {
+        console.log("⏭️ サーバーからの指示によりこのステップをスキップします。");
         nextStep();
       } else {
         showBotMessage(data && data.aiQuestion ? data.aiQuestion : "詳しくお話を聞かせてください😊");
@@ -258,7 +269,8 @@ async function nextStep() {
       }
     } catch (e) {
       removeLoading();
-      showBotMessage("なるほど、詳しく教えていただきありがとうございます！");
+      console.error("🔥致命的なフェッチ失敗によりフォールバック発動:", e);
+      showBotMessage("なるほど、詳しく教えていただきありがとうございます！次に進みましょう。");
       inputContainer.style.display = 'flex';
     }
   }
@@ -285,6 +297,9 @@ async function sendFreeText() {
   const currentKey = FLOW[flowIdx].key;
   dataLog.freeTexts[currentKey] = text;
 
+  // サブステップの加算管理をログ出力
+  console.log(`📝 テキスト入力完了 キー: ${currentKey}, 入力内容: ${text}`);
+
   if (currentKey === 's3_deep_1') {
     subStep = 1;
   } else if (currentKey === 's5_deep_1') {
@@ -292,6 +307,8 @@ async function sendFreeText() {
   } else {
     subStep = 0;
   }
+  
+  console.log(`➡️ 次に進む直前のサブステップ設定値: ${subStep}`);
   nextStep();
 }
 
