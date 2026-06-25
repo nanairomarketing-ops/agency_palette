@@ -16,7 +16,7 @@ export default async function handler(req, res) {
 
   try {
     // ==========================================
-    // 1. 最終ステップ：親のまなざしをアップデートするフィードバック生成
+    // 1. 最終ステップ：フィードバック生成
     // ==========================================
     if (currentStep === 5) {
       try {
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
 
 【フィードバックの最重要指示】
 ・親が打ったリアルなつぶやき（自由記述）から、「子どものエージェンシーの芽（きらめきや成長）」を具体的に1つ以上見つけ出して言語化してください。
-・単にお子さんや親御さんを褒めるだけでなく、「親御さんがその些細な変化や瞬間に気づき、おもしろがったり記録に残そうとしたりした、その『まなざし（視点）』自体が、子どものエージェンシーを育む最高の環境デザインである」という観点を取り入れ、親の観察眼を肯定し、アップデートするようなコメンタリー（250文字程度）を作成してください。
+・「親御さんがその些細な変化や瞬間に気づき、おもしろがったり記録に残そうとしたりした、その『まなざし（視点）』自体が、子どものエージェンシーを育む最高の環境デザインである」という観点を取り入れ、親の観察眼を肯定し、アップデートするようなコメンタリー（250文字程度）を作成してください。
 ・「点数」「スコア」という言葉は絶対に使用しないでください。
 
 【入力データ】
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 必ず以下のJSONフォーマットのみで返却してください。余計なマークダウンは一切含めないでください。
 {
   "scores": { "s1": 85, "s2": 90, "s3": 60, "s4": 95, "s5": 80 },
-  "commentary": "（ここに親御さんのまなざしをアップデートするあたたかいメッセージを記述）"
+  "commentary": "（コメンタリー）"
 }
 `;
 
@@ -57,41 +57,53 @@ export default async function handler(req, res) {
       } catch (e) {
         return res.status(200).json({
           scores: { "s1": 80, "s2": 80, "s3": 80, "s4": 80, "s5": 80 },
-          commentary: "今週（最近）もお疲れ様でした。親子のあたたかい対話ログは大切に預かっています✨お子さんの日々のきらめきは独自の彩りで育まれていますので、どうぞそのまま見守ってあげてくださいね！"
+          commentary: "今週（最近）もお疲れ様でした。親子のあたたかい対話ログは大切に預かっています✨"
         });
       }
     }
 
     // ==========================================
-    // 2. 途中のステップ：あたたかい保育士風クッション ＆ 分岐深掘り
+    // 2. 途中のステップ：その場で打ち返すリアルタイム・ラリーロジック
     // ==========================================
     let aiQuestion = "";
 
-    // ーー STEP 1: 没頭（s2）の深掘り ーー
+    // ーー STEP 1: 没頭（s2）の自由記述に対する打ち返し ーー
     if (currentStep === 1) {
+      const userReply = freeTexts ? (freeTexts.s2_deep || "") : "";
       const q2Choice = chosenChoices ? chosenChoices.s2 : 0;
+      
+      let cushion = "お話を聞かせていただきありがとうございます！";
       if (q2Choice === 2 || q2Choice === 1) {
-        aiQuestion = "すてきですね！お子さんがそこまで夢中になれる一冊、とても気になります。何の本を読みましたか？その時、どんな様子だったか印象に残っていることを教えてください😊";
+        cushion = `なるほど！「${userReply.slice(0, 12)}…」の本にそこまで夢中になっていたのですね。その様子を想像するだけで愛おしいです😊`;
       } else {
-        aiQuestion = "そうだったのですね。年齢的にページをどんどんめくりたい時期だったり、他におもしろそうな誘惑があったりしたのかもしれませんね。何か思い当たる理由はありますか？（実はすぐめくるのも、その子なりの新しい探索の形だったりしますよ✨）";
+        cushion = "なるほど、日によって色々なブームや気分の波もありますよね。親御さんがそこを優しく見守られているのが素敵です✨";
       }
+
+      // 次の質問（日常の溢れ出し：選択肢）へ進むためのダミーではなく、ここはHTML側のフローで自動で choice に移るため、
+      // この文言がそのまま使われます。
+      aiQuestion = cushion;
     } 
     
-    // ーー STEP 2: 日常の溢れ出し（s3）の深掘り（2段階） ーー
+    // ーー STEP 2: 日常の溢れ出し（s3）の深掘り ーー
     else if (currentStep === 2) {
       const q3Choice = chosenChoices ? chosenChoices.s3 : 2;
+      
       if (q3Choice === 0) {
         if (subStep === 0) {
-          // 保育士風の共感クッション
+          // 選択肢で「溢れ出た！」を選んだ直後
           aiQuestion = "わあ、ポロッと言葉が溢れ出るなんて素晴らしい瞬間ですね！👏 それは何という本の、どんな言葉やフレーズでしたか？ぜひ教えてください！";
         } else if (subStep === 1) {
-          // 文脈の追加聞き取り（場面深掘り）
-          const prevText = freeTexts ? (freeTexts.s3_deep_1 || "") : "";
-          // ユーザーの回答に「とき」「場面」「場所」「で」などの文脈キーワードが薄かったら発動
-          if (!prevText.includes("とき") && !prevText.includes("場面") && !prevText.includes("際") && !prevText.includes("部屋") && !prevText.includes("で")) {
-            aiQuestion = "教えていただきありがとうございます！その言葉、日常のどんな場面で、どんな風に飛び出してきたんですか？ぜひ文脈も知りたいです✨";
+          // 「言葉」を教えてもらった直後 ➡️ 【ここがズレていた場所です！】
+          const currentReply = freeTexts ? (freeTexts.s3_deep_1 || "") : "";
+          
+          // 今届いたホヤホヤの言葉に対して、その場ですぐに相槌を打つ
+          let cushion = `「${currentReply.slice(0, 20)}…」という言葉が飛び出してきたのですね！お子さんの頭の中に世界が広がっている証拠ですね✨`;
+          
+          // 文脈（場面）キーワードが入っていなければ、その場ですかさず深掘り
+          if (!currentReply.includes("とき") && !currentReply.includes("場面") && !currentReply.includes("際") && !currentReply.includes("部屋") && !currentReply.includes("で") && !currentReply.includes("話をしてくる")) {
+            aiQuestion = `${cushion}\n\nちなみに、それは日常のどんな場面で、どんな風に飛び出してきたんですか？ぜひその時の文脈も教えてください😊`;
           } else {
-            // すでに文脈が書かれていれば、保育士風に受け止めて次のステップへスキップ
+            // すでに文脈が入っていれば、このサブステップは用済みなので次へ流す（skip）
             return res.status(200).json({ skip: true });
           }
         }
@@ -103,30 +115,36 @@ export default async function handler(req, res) {
     // ーー STEP 3: 遊びの昇華（s4）の深掘り ーー
     else if (currentStep === 3) {
       const q4Choice = chosenChoices ? chosenChoices.s4 : 2;
-      const prevUserReply = freeTexts ? (freeTexts.s3_deep_1 || freeTexts.s3_deep_2 || "") : "";
+      const userReply = freeTexts ? (freeTexts.s4_deep || "") : "";
       
-      // 保育士風の軽い返答クッションを生成
-      let cushion = "お話を聞かせていただきありがとうございます！親御さんのあたたかい観察眼、本当にすてきですね。";
-      if (prevUserReply) cushion = `「${prevUserReply.slice(0, 15)}…」のくだり、お話を聞いているだけで情景が浮かんで微笑ましい気持ちになります、お答えいただきありがとうございます！`;
+      // 直前（STEP2の最後、または文脈深掘り）のユーザーのつぶやきへのクッション
+      // s3_deep_2 があればそれを、なければ s3_deep_1 を見る
+      const lastS3Reply = freeTexts ? (freeTexts.s3_deep_2 || freeTexts.s3_deep_1 || "") : "";
+      let cushion = "お話を聞かせていただきありがとうございます！親のあたたかい観察眼、本当にすてきですね。";
+      if (lastS3Reply) {
+        cushion = `「${lastS3Reply.slice(0, 15)}…」のくだり、お話を聞いているだけで情景が浮かんで微笑ましい気持ちになります！教えていただきありがとうございます。`;
+      }
 
       if (q4Choice === 0 || q4Choice === 1) {
         aiQuestion = `${cushion}\n\nさて、本の世界をごっこ遊びやルールに反映させていたとのことですが、何の本で、どんな風に遊びに取り入れられていたかを詳しく教えてください✨`;
       } else {
-        // 深掘り対象外ならクッションを挟むためにskipせず、会話を整えて次へ流す用のフラグ処理（今回はシンプルにskip）
         return res.status(200).json({ skip: true });
       }
     } 
     
-    // ーー STEP 4: 絵本の選択を広げるアプローチ（s5）の深掘り（2段階） ーー
+    // ーー STEP 4: 絵本の選択を広げるアプローチ（s5）の深掘り ーー
     else if (currentStep === 4) {
-      const prevUserReply = freeTexts ? (freeTexts.s4_deep || "") : "";
-      let cushion = "ありがとうございます！なるほど、本の世界がそんな風に遊びに溶け込んでいくのですね。";
-      if (prevUserReply) cushion = `わあ、遊びの中にそんな素敵な反映の形があったのですね！お話を聞けて嬉しいです。`;
+      const userReply = freeTexts ? (freeTexts.s4_deep || "") : "";
+      let cushion = "お話を聞かせていただきありがとうございます！";
+      if (userReply) {
+        cushion = `わあ、遊びの中にそんな素敵な反映の形（${userReply.slice(0, 10)}…）があったのですね！本の世界を自分なりに料理していてすごいです。`;
+      }
 
       if (subStep === 0) {
-        aiQuestion = `${cushion}\n\n今回選ばれたそのアプローチ（仕込みや見守りなど）について、どうしてそれを選んだのですか？背景にある想いをぜひ教えてください。`;
+        aiQuestion = `${cushion}\n\n今回取り組まれたそのアプローチについて、どうしてそれを選んだのですか？背景にある想いをぜひ教えてください。`;
       } else if (subStep === 1) {
-        aiQuestion = "あたたかい想いを聞かせていただき、ありがとうございます。結果的にお子さんはその本を読みましたか？読んだ場合、どんな反応だったかもぜひ教えてください！";
+        const s5Deep1Reply = freeTexts ? (freeTexts.s5_deep_1 || "") : "";
+        aiQuestion = `「${s5Deep1Reply.slice(0, 15)}…」というあたたかい想い、ジーンときます。素晴らしい環境のデザインですね。\n\n結果的にお子さんはその本を読みましたか？読んだ場合、どんな反応だったかもぜひ教えてください！`;
       }
     }
 
