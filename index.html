@@ -133,19 +133,12 @@ async function sendMessage() {
   showLoading();
 
   try {
-    // URLをトップ直下の /chat.js (または /chat ) に直接指定してVercelの誤認識を完全破壊！
-    const paths = ['/chat', '/chat.js'];
-    let res = null;
-    for (const p of paths) {
-      try {
-        res = await fetch(p, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chatHistory: chatHistory })
-        });
-        if (res.ok) break;
-      } catch(e){}
-    }
+    // Vercel公式のAPIフォルダパス「/api/apichat」へと直撃させる
+    const res = await fetch('/api/apichat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chatHistory: chatHistory })
+    });
     
     const data = await res.json();
     removeLoading();
@@ -163,7 +156,7 @@ async function sendMessage() {
 
   } catch (e) {
     removeLoading();
-    // もし404エラーを掴んでしまったら、スマホ側で緊急メッセージを返す
+    // 404/405エラーを掴んでいる間だけ動作する、スマホ側の一時的な安全弁
     showBotMessage("お話を聞かせていただき、本当にありがとうございます😊 お子さんがその本に没頭したりフレーズを話したりしている時、親御さんから見てどんな表情や様子が一番印象に残っていますか？ぜひゆるく教えてください✨");
   }
 }
