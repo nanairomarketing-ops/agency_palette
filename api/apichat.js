@@ -25,8 +25,8 @@ export default async function handler(req, res) {
 親が回答した指標データと、これまでの深掘り対話（自由記述ログ）をもとに、文脈を深く読み解き、「エージェンシーパレット」のスコア（各100点満点）と、あたたかいフィードバックを生成してください。
 
 【フィードバックの最重要指示】
-・親が打ったリアルなつぶやき（自由記述）から、「子どものエージェンシーの芽（きらめきや成長）」を具体的に1つ以上見つけ出して言語化してください。
-・「親御さんがその些細な変化や瞬間に気づき、おもしろがったり記録に残そうとしたりした、その『まなざし（視点）』自体が、子どものエージェンシーを育む最高の環境デザインである」という観点を取り入れ、親の観察眼を肯定し、アップデートするようなコメンタリー（250文字程度）を作成してください。
+・親が打ったリアルなつぶやき（自由記述：ゾロリ、宇宙、遊びへの反映など）から、「子どものエージェンシーの芽（きらめきや成長）」を具体的に見つけ出して言語化してください。
+・「親御さんがその些細な変化や瞬間に気づき、おもしろがったり記録に残そうとしたりした、その『まなざし（視点）』自体が、子どものエージェンシーを育む最高の環境デザインである」という観点を取り入れ、親の観察眼を全肯定し、アップデートするようなコメンタリー（250文字程度）を作成してください。
 ・「点数」「スコア」という言葉は絶対に使用しないでください。
 
 【入力データ】
@@ -63,11 +63,11 @@ export default async function handler(req, res) {
     }
 
     // ==========================================
-    // 2. ユーザーの自由記述（テキスト入力）に対してのみ走る、あたたかい返答ラリー
+    // 2. 自由記述に対する【リアルタイム・保育士ラリー】
     // ==========================================
     let aiQuestion = "";
 
-    // ーー STEP 1: 没頭（s2）の選択肢を選んだ後に開く、最初の自由記述の問い ーー
+    // ーー STEP 1: 没頭（s2）の選択肢を選んだ直後に表示する最初の問い ーー
     if (currentStep === 1) {
       const q2Choice = chosenChoices ? chosenChoices.s2 : 0;
       if (q2Choice === 2 || q2Choice === 1) {
@@ -77,61 +77,68 @@ export default async function handler(req, res) {
       }
     } 
     
-    // ーー STEP 2: 日常の溢れ出し（s3）の自由入力に対するラリー ーー
-    else if (currentStep === 2) {
-      const q3Choice = chosenChoices ? chosenChoices.s3 : 2;
+    // ーー STEP 2: 没頭のテキスト（例: ゾロリ）を打った直後の打ち返し ーー
+    else if (currentStep === 2 && subStep === 0) {
+      const s2Reply = freeTexts ? (freeTexts.s2_deep || "") : "";
       
-      if (q3Choice === 0) {
-        if (subStep === 0) {
-          // 選択肢で「溢れ出た！」を選んだ後の最初の問い（ここは選択肢直後なので、シンプルに質問を提示）
-          aiQuestion = "わあ、ポロッと言葉が日常に溢れ出るなんて素晴らしい瞬間ですね！👏 それは何という本の、どんな言葉やフレーズでしたか？ぜひ教えてください！";
-        } else if (subStep === 1) {
-          // ユーザーから具体的な「フレーズ」を打ってもらった直後のリアルタイム・ラリー！
-          const currentReply = freeTexts ? (freeTexts.s3_deep_1 || "") : "";
-          let cushion = `「${currentReply.slice(0, 20)}…」という言葉が飛び出してきたのですね！お子さんの頭の中に絵本の世界がしっかり広がっている証拠ですね✨`;
-          
-          // 文脈のキーワードが含まれていなければ、すかさずその場で深掘り
-          if (!currentReply.includes("とき") && !currentReply.includes("場面") && !currentReply.includes("際") && !currentReply.includes("部屋") && !currentReply.includes("で") && !currentReply.includes("話をしてくる")) {
-            aiQuestion = `${cushion}\n\nちなみに、それは日常のどんな場面で、どんな風に飛び出してきたんですか？ぜひその時の文脈も教えてください😊`;
-          } else {
-            // すでに文脈が十分なら、次の選択肢へスキップ
-            return res.status(200).json({ skip: true });
-          }
-        }
+      // 今打たれたばかりのテキスト（例: ゾロリおなら）に対して即座に相槌を生成！
+      let cushion = "お話を聞かせていただきありがとうございます！親御さんのあたたかい観察眼、本当にすてきですね🌱";
+      if (s2Reply) {
+        cushion = `なるほど！「${s2Reply}」のそんな姿が見られたのですね。お話を聞いているだけでこちらまで微笑ましい気持ちになります😊`;
+      }
+
+      // 相槌のあとに、シナリオ通りの次の質問を綺麗にドッキング
+      aiQuestion = `${cushion}\n\nでは、次の質問です。\n読んだ本の言葉や場面が、日常の会話の中で出てきたことはありましたか？`;
+      
+      // index.html側がこれを受け取ると、次の選択肢「s3」へと綺麗に繋がります
+    }
+
+    // ーー STEP 3: 日常の溢れ出し（s3）で「溢れ出た！」を選んだ直後の問い ーー
+    else if (currentStep === 2 && subStep === 1) {
+      aiQuestion = "わあ、ポロッと言葉が日常に溢れ出るなんて素晴らしい瞬間ですね！👏 それは何という本の、どんな言葉やフレーズでしたか？ぜひ教えてください！";
+    }
+
+    // ーー STEP 4: フレーズ（例: 宇宙）を打った直後の打ち返し ＆ 場面深掘り ーー
+    else if (currentStep === 3) {
+      const currentReply = freeTexts ? (freeTexts.s3_deep_1 || "") : "";
+      let cushion = `「${currentReply}」という言葉が飛び出してきたのですね！お子さんの頭の中に世界が広がっている証拠ですね✨`;
+      
+      // 場面（文脈）キーワードが入っていなければ、その場ですかすさず深掘り発動！
+      if (!currentReply.includes("とき") && !currentReply.includes("場面") && !currentReply.includes("際") && !currentReply.includes("部屋") && !currentReply.includes("で") && !currentReply.includes("話をしてくる")) {
+        aiQuestion = `${cushion}\n\nちなみに、それは日常のどんな場面で、どんな風に飛び出してきたんですか？ぜひその時の文脈も教えてください😊`;
       } else {
-        return res.status(200).json({ skip: true });
+        // すでに「最近ふとした時に〜」と文脈を書いてくれていた場合は、
+        // 1周遅れにせず、その場ですぐに次のシナリオ（ごっこ遊びの選択肢への誘導）へ流す！
+        let s3Cushion = `「${currentReply}」のエピソード、ふとした瞬間に溢れ出るの最高に愛おしいですね👏\n\n次の質問です。\n今週（最近）、本の世界観をごっこ遊びやルールに反映させている様子はありましたか？`;
+        return res.status(200).json({ aiQuestion: s3Cushion, skip: false });
       }
     } 
-    
-    // ーー STEP 3: 遊びの昇華（s4）の自由入力に対するラリー ーー
-    else if (currentStep === 3) {
+
+    // ーー STEP 5: ごっこ遊びの深掘り質問の提示 ーー
+    else if (currentStep === 4 && subStep === 0) {
       const q4Choice = chosenChoices ? chosenChoices.s4 : 2;
-      
       if (q4Choice === 0 || q4Choice === 1) {
-        // 選択肢直後なのでシンプルに深掘りの問いを提示
         aiQuestion = "本の世界が遊びに溶け込んでいたのですね！子どもの創造力って本当に豊かです✨ 何の本で、どんな風に遊びやルールに取り入れられていたかを詳しく教えてください！";
       } else {
         return res.status(200).json({ skip: true });
       }
     } 
-    
-    // ーー STEP 4: 絵本の選択を広げるアプローチ（s5）の自由入力に対するラリー ーー
-    else if (currentStep === 4) {
-      // 直前（ごっこ遊び）のユーザーのつぶやきへのクッション
-      const lastS4Reply = freeTexts ? (freeTexts.s4_deep || "") : "";
-      let s4Cushion = "お話を聞かせていただきありがとうございます！";
-      if (lastS4Reply) {
-        s4Cushion = `わあ、遊びの中にそんな素敵な反映の形（${lastS4Reply.slice(0, 10)}…）があったのですね！本の世界を自分なりに表現していてすごいです👏`;
-      }
 
-      if (subStep === 0) {
-        // 選択肢でアプローチを選んだ直後
-        aiQuestion = `${s4Cushion}\n\n今回取り組まれたそのアプローチについて、どうしてそれを選んだのですか？背景にある想いをぜひ教えてください😊`;
-      } else if (subStep === 1) {
-        // 「想い」をテキスト入力してもらった直後
-        const s5Deep1Reply = freeTexts ? (freeTexts.s5_deep_1 || "") : "";
-        aiQuestion = `「${s5Deep1Reply.slice(0, 15)}…」というあたたかい想い、ジーンときます。素晴らしい環境のデザインですね。\n\n結果的にお子さんはその本を読みましたか？読んだ場合、どんな反応だったかもぜひ教えてください！`;
+    // ーー STEP 6: ごっこ遊び（例: リモネンスプラッシュ）を打った直後の打ち返し ーー
+    else if (currentStep === 4 && subStep === 1) {
+      const s4Reply = freeTexts ? (freeTexts.s4_deep || "") : "";
+      let cushion = "お話を聞かせていただきありがとうございます！";
+      if (s4Reply) {
+        cushion = `わあ、遊びの中にそんな素敵な反映の形（${s4Reply}）があったのですね！本の世界を自分なりに表現していてすごいです👏`;
       }
+      
+      aiQuestion = `${cushion}\n\n最後に、今週（最近）あなたご自身は子供の絵本の選択が広がるようなアプローチはしましたか？`;
+    }
+
+    // ーー STEP 7: 最初のアプローチの想い（例: かぼちゃの本）を打った直後の問い ーー
+    else if (currentStep === 4 && subStep === 2) {
+      const s5Deep1Reply = freeTexts ? (freeTexts.s5_deep_1 || "") : "";
+      aiQuestion = `「${s5Deep1Reply}」というあたたかい想い、ジーンときます。親御さんの素晴らしい環境のデザイン（仕込み）ですね。\n\n結果的にお子さんはその本を読みましたか？読んだ場合、どんな反応だったかもぜひ教えてください！`;
     }
 
     return res.status(200).json({ aiQuestion, skip: false });
