@@ -140,7 +140,6 @@ function goBackStep() {
   }
   removeLoading();
   
-  // HTML再生成で消えたボタンのクリックイベントを再登録する処理
   const box = document.getElementById('choices-box');
   if (box && FLOW[flowIdx].choices) {
     const btns = box.getElementsByClassName('choice-btn');
@@ -241,26 +240,13 @@ async function nextStep() {
 
   const step = FLOW[flowIdx];
   if (step.type === 'choice') {
-    // サーバーに「あたたかい返答メッセージ」だけを取りに行く
-    showLoading();
-    try {
-      const data = await safeFetch({ currentStep: getCleanStepNum() - 1, isChoiceResponse: true, subStep: subStep, chosenChoices: dataLog.chosenChoices, freeTexts: dataLog.freeTexts });
-      removeLoading();
-      if (data && data.aiQuestion) showBotMessage(data.aiQuestion);
-    } catch (e) {
-      removeLoading();
-    }
-    
-    // その直後に、本来のシナリオの選択肢を出す
-    setTimeout(() => {
-      showBotMessage(step.bot);
-      showChoices(step.choices);
-    }, 800);
-
+    // 選択肢のときはサーバー通信を挟まず、一瞬で次の質問を出す（リズム重視！）
+    showBotMessage(step.bot);
+    showChoices(step.choices);
   } else if (step.type === 'freetext') {
     showLoading();
     try {
-      const data = await safeFetch({ currentStep: getCleanStepNum(), isChoiceResponse: false, subStep: subStep, chosenChoices: dataLog.chosenChoices, freeTexts: dataLog.freeTexts });
+      const data = await safeFetch({ currentStep: getCleanStepNum(), subStep: subStep, chosenChoices: dataLog.chosenChoices, freeTexts: dataLog.freeTexts });
       removeLoading();
 
       if (data && data.skip) {
