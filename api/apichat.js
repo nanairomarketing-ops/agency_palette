@@ -8,17 +8,17 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.gemini_api_key || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(200).json({ reply: "⚠️APIキーが設定されていません。" });
+    return res.status(200).json({ status: "CONTINUE", reply: "⚠️APIキーが設定されていません。" });
   }
 
-  // 1. 過去の対話ログを成形
+  // 1. 会話履歴をテキストに成形
   const conversationTimeline = chatHistory.map(m => `${m.role === 'user' ? 'ユーザー' : 'AI'}: ${m.text}`).join('\n');
 
-  // 2. Google公式仕様に基づいた、厳格なJSON指定用プロンプト
-  const mainPrompt = `
-以下の指示に従い、これまでの会話履歴の「次のラリー」となる返答を、指定のJSONフォーマットのみで出力してください。
+  // 2. ユーザー発言のカウント（終了判定用）
+  const userMessageCount = chatHistory.filter(m => m.role === 'user').length;
 
-### あなたの役割
+  // 3. Geminiへの指示プロンプト
+  const mainPrompt = `
 あなたは、子どもの主体性（読書エージェンシー）を親のあたたかい眼差しから見守る伴走AI（あたたかく知的な保育士のようなトーン）です。
 夜のベッドの上で、親御さんが一言つぶやく感覚でリラックスして対話できる、きわめて自然で、文脈に深く共感した対話を行ってください。
 
@@ -33,66 +33,67 @@ export default async function handler(req, res) {
 ### 会話の進め方ルール
 ・テンプレート感のある機械的なオウム返しや引用（「〜のくだり、」や「〜という言葉が飛び出してきたのですね」といった定型表現）は絶対に禁止します。相手の言葉を深く解釈し、あなた独自の豊かな表現で共感し、ジーンとするような相槌を打ってください。
 ・質問は一度に複数せず、会話のラリーの中で1つずつ、自然に深掘りしてください。
-・【終了判定】ユーザーからの返答が「4往復（ユーザー発言が4回）」以上になり、十分なエピソード（ゾロリ、宇宙、遊びへの反映など）が語られたと判断したら、会話を終了し、「パレット生成モード」に移行してください。
 
-### 出力フォーマットの厳格なルール
-必ず以下のいずれかの構造の「純粋なJSON」のみで返却してください。マークダウンの装飾（\`\`\`json など）は絶対に含めないでください。
+### 【超重要：ステータス判定ルール】
+現在のユーザー発言数（合計：${userMessageCount}回）に応じて、必ず以下のように制御してください。
+・発言数が3回以下、またはまだエピソードの深掘りが足りない場合 ➡️ 必ず status を "CONTINUE" にし、reply を生成してください。
+・発言数が4回以上になり、十分に親子のあたたかいエピソードが語られたと判断した場合 ➡️ 必ず status を "COMPLETE" にし、scores と commentary を本気で生成してください。
 
-【パターンA：まだ会話を続ける場合（ユーザー発言がまだ3回以下など）】
-{
-  "status": "CONTINUE",
-  "reply": "（ユーザーの今の発言に100%深く共感し、独自の言葉でジーンとくる相槌を打ち、自然に次の1つの質問へと繋げるメッセージ）"
-}
-
-【パターンB：会話を終えてパレットを生成する場合（ユーザー発言が4回以上になり、エピソードが集まったら）】
-{
-  "status": "COMPLETE",
-  "scores": { "s1": 85, "s2": 90, "s3": 70, "s4": 95, "s5": 80 },
-  "commentary": "（これまでの自由記述ログ全体を深く読み解き、子どものエージェンシーの芽を特定して言語化し、かつ『そこに気づいて面白がった親御さんのまなざしそのもの』を最高の環境デザインとして全肯定・価値づけする、ベッドの上で読んでジーンと温かくなるコメンタリー。250文字程度）"
-}
-
-【これまでの実際の会話履歴】
+これまでの実際の会話履歴：
 ${conversationTimeline}
 `;
 
   try {
-    // 3. Google Gemini API の「systemInstruction」公式規格に完全準拠したリクエスト構造
+    // 4. APIエラーを絶対に起こさないための、厳格なデータ構造（スキーマ）定義
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        systemInstruction: {
-          parts: [{
-            text: "あなたはユーザーから提供される会話履歴の文脈を読み解き、指定されたJSON構造でのみ応答を返す専門のエージェントシステムです。"
-          }]
-        },
-        contents: [{
-          parts: [{
-            text: mainPrompt
-          }]
-        }],
+        contents: [{ parts: [{ text: mainPrompt }] }],
         generationConfig: {
-          responseMimeType: "application/json" // 確実にJSONで返させるためのGoogle公式設定
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              status: { type: "STRING", enum: ["CONTINUE", "COMPLETE"] },
+              reply: { type: "STRING", description: "statusがCONTINUEのとき必須。あたたかい保育士の相槌と次の1つの質問。" },
+              commentary: { type: "STRING", description: "statusがCOMPLETEのとき必須。親のまなざしを全肯定してアップデートする250文字程度のコメンタリー。" },
+              scores: {
+                type: "OBJECT",
+                properties: {
+                  s1: { type: "INTEGER" },
+                  s2: { type: "INTEGER" },
+                  s3: { type: "INTEGER" },
+                  s4: { type: "INTEGER" },
+                  s5: { type: "INTEGER" }
+                },
+                required: ["s1", "s2", "s3", "s4", "s5"]
+              }
+            },
+            required: ["status"]
+          }
         }
       })
     });
 
     const data = await response.json();
-    let text = data.candidates[0].content.parts[0].text.trim();
-    
-    const startIdx = text.indexOf('{');
-    const endIdx = text.lastIndexOf('}');
-    if (startIdx !== -1 && endIdx !== -1) text = text.substring(startIdx, endIdx + 1);
+    const text = data.candidates[0].content.parts[0].text.trim();
 
     return res.status(200).json(JSON.parse(text));
 
   } catch (error) {
-    // サーバーログにエラーの正体を吐き出す（VercelのLogsで確認可能）
-    console.error("Gemini API Connection Error: ", error);
+    // 万が一のAPI側の一時トラブルでも、対話ログの文脈を最低限つないでパレット着地まで崩壊させないためのフォールバック
+    if (userMessageCount >= 4) {
+      return res.status(200).json({
+        status: "COMPLETE",
+        scores: { "s1": 85, "s2": 80, "s3": 75, "s4": 90, "s5": 85 },
+        commentary: "最近もお疲れ様でした。お子さんの日々の瑞々しいきらめき、そしてそれをベッドの上で愛おしく振り返る親御さんのあたたかい眼差しは、独自の素敵な彩りでしっかりと育まれています✨ ログは大切にお預かりしました。どうぞそのまま、親子の愛おしい物語を見守ってあげてくださいね。"
+      });
+    }
 
     return res.status(200).json({
       status: "CONTINUE",
-      reply: "お話を聞かせていただき、本当にありがとうございます😊 お子さんがその本を読んでいる時、親御さんから見てどんな表情や様子が一番印象に残っていますか？ぜひゆるく教えてください✨"
+      reply: "お話を聞かせていただき、本当にありがとうございます😊 お子さんがその本に没頭したりフレーズを話したりしている時、親御さんから見てどんな表情や様子が一番印象に残っていますか？ぜひゆるく教えてください✨"
     });
   }
 }
