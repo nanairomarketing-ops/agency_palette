@@ -4,7 +4,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { currentStep, isChoiceResponse, subStep, chosenChoices, freeTexts } = req.body || {};
+  const { currentStep, subStep, chosenChoices, freeTexts } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY || process.env.gemini_api_key || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -63,75 +63,72 @@ export default async function handler(req, res) {
     }
 
     // ==========================================
-    // 2. 選択肢に対する純粋なあたたかい返答（シナリオを止めない相槌）
-    // ==========================================
-    if (isChoiceResponse) {
-      let choiceFeedback = "お話を聞かせていただきありがとうございます！";
-      
-      if (currentStep === 0) { // s1(本の読み方)へのリアクション
-        choiceFeedback = "なるほど、そんな風に本を開く時間があったのですね。親子の心地よい距離感が伝わってきます🌱";
-      } else if (currentStep === 1) { // s2(没頭)へのリアクション
-        const q2Choice = chosenChoices ? chosenChoices.s2 : 0;
-        if (q2Choice === 2 || q2Choice === 1) {
-          choiceFeedback = "じっくり没頭している姿、本当に愛おしいですね。その世界にグッと入り込んでいる時間が素晴らしいです😊";
-        } else {
-          choiceFeedback = "そうだったのですね。日によって色々なブームや気分の波もありますよね、優しく見守られているのが素敵です✨";
-        }
-      } else if (currentStep === 2) { // s3(日常の溢れ出し)へのリアクション
-        const q3Choice = chosenChoices ? chosenChoices.s3 : 2;
-        if (q3Choice === 0) {
-          choiceFeedback = "わあ、ポロッと言葉が日常に溢れ出るなんて素晴らしい瞬間ですね！👏";
-        } else {
-          choiceFeedback = "なるほど、お子さんのタイミングで頭の中にじっくり熟成されているのかもしれませんね。";
-        }
-      } else if (currentStep === 3) { // s4(遊びの昇華)へのリアクション
-        const q4Choice = chosenChoices ? chosenChoices.s4 : 2;
-        if (q4Choice === 0 || q4Choice === 1) {
-          choiceFeedback = "本の世界が遊びに溶け込んでいたのですね！子どもの創造力って本当に豊かです✨";
-        } else {
-          choiceFeedback = "なるほど、静かに本の世界を楽しんだり、自分の中で味わったりしている時間なのかもしれませんね😊";
-        }
-      } else if (currentStep === 4) { // s5(広げるアプローチ)へのリアクション
-        choiceFeedback = "素敵なアプローチですね。親御さんのあたたかい想いや仕込みが、これからの彩りに繋がっていきますね✨";
-      }
-
-      return res.status(200).json({ aiQuestion: choiceFeedback, skip: false });
-    }
-
-    // ==========================================
-    // 3. 自由記述（テキスト入力）に対するその場での深掘り・ラリー
+    // 2. ユーザーの自由記述（テキスト入力）に対してのみ走る、あたたかい返答ラリー
     // ==========================================
     let aiQuestion = "";
 
+    // ーー STEP 1: 没頭（s2）の選択肢を選んだ後に開く、最初の自由記述の問い ーー
     if (currentStep === 1) {
-      const userReply = freeTexts ? (freeTexts.s2_deep || "") : "";
-      aiQuestion = `「${userReply.slice(0, 15)}…」の様子、お話を聞いているだけで情情景が浮かんで微笑ましいです！教えていただきありがとうございます。`;
-    } 
-    
-    else if (currentStep === 2) {
-      if (subStep === 0) {
-        aiQuestion = "それは何という本の、どんな言葉やフレーズでしたか？ぜひ教えてください！";
-      } else if (subStep === 1) {
-        const currentReply = freeTexts ? (freeTexts.s3_deep_1 || "") : "";
-        let cushion = `「${currentReply.slice(0, 20)}…」という言葉が飛び出してきたの遷ですね！お子さんの頭の中に世界が広がっている証拠ですね✨`;
-        
-        if (!currentReply.includes("とき") && !currentReply.includes("場面") && !currentReply.includes("際") && !currentReply.includes("部屋") && !currentReply.includes("で") && !currentReply.includes("話をしてくる")) {
-          aiQuestion = `${cushion}\n\nちなみに、それは日常のどんな場面で、どんな風に飛び出してきたんですか？ぜひその時の文脈も教えてください😊`;
-        } else {
-          return res.status(200).json({ skip: true });
-        }
+      const q2Choice = chosenChoices ? chosenChoices.s2 : 0;
+      if (q2Choice === 2 || q2Choice === 1) {
+        aiQuestion = "じっくり没頭している姿、本当に愛おしいですね😊 お子さんがそこまで夢中になれる一冊、とても気になります。何の本を読みましたか？その時、どんな様子だったか印象に残っていることを教えてください！";
+      } else {
+        aiQuestion = "そうだったのですね。日によってブームや気分の波もありますよね。何か思い当たる理由はありますか？（実はすぐめくるのも、その子なりの新しい探索の形だったりしますよ✨）";
       }
     } 
     
-    else if (currentStep === 3) {
-      const userReply = freeTexts ? (freeTexts.s4_deep || "") : "";
-      aiQuestion = `わあ、遊びの中にそんな素敵な反映の形（${userReply.slice(0, 12)}…）があったのですね！本の世界を自分なりに料理していてすごいです。`;
+    // ーー STEP 2: 日常の溢れ出し（s3）の自由入力に対するラリー ーー
+    else if (currentStep === 2) {
+      const q3Choice = chosenChoices ? chosenChoices.s3 : 2;
+      
+      if (q3Choice === 0) {
+        if (subStep === 0) {
+          // 選択肢で「溢れ出た！」を選んだ後の最初の問い（ここは選択肢直後なので、シンプルに質問を提示）
+          aiQuestion = "わあ、ポロッと言葉が日常に溢れ出るなんて素晴らしい瞬間ですね！👏 それは何という本の、どんな言葉やフレーズでしたか？ぜひ教えてください！";
+        } else if (subStep === 1) {
+          // ユーザーから具体的な「フレーズ」を打ってもらった直後のリアルタイム・ラリー！
+          const currentReply = freeTexts ? (freeTexts.s3_deep_1 || "") : "";
+          let cushion = `「${currentReply.slice(0, 20)}…」という言葉が飛び出してきたのですね！お子さんの頭の中に絵本の世界がしっかり広がっている証拠ですね✨`;
+          
+          // 文脈のキーワードが含まれていなければ、すかさずその場で深掘り
+          if (!currentReply.includes("とき") && !currentReply.includes("場面") && !currentReply.includes("際") && !currentReply.includes("部屋") && !currentReply.includes("で") && !currentReply.includes("話をしてくる")) {
+            aiQuestion = `${cushion}\n\nちなみに、それは日常のどんな場面で、どんな風に飛び出してきたんですか？ぜひその時の文脈も教えてください😊`;
+          } else {
+            // すでに文脈が十分なら、次の選択肢へスキップ
+            return res.status(200).json({ skip: true });
+          }
+        }
+      } else {
+        return res.status(200).json({ skip: true });
+      }
     } 
     
+    // ーー STEP 3: 遊びの昇華（s4）の自由入力に対するラリー ーー
+    else if (currentStep === 3) {
+      const q4Choice = chosenChoices ? chosenChoices.s4 : 2;
+      
+      if (q4Choice === 0 || q4Choice === 1) {
+        // 選択肢直後なのでシンプルに深掘りの問いを提示
+        aiQuestion = "本の世界が遊びに溶け込んでいたのですね！子どもの創造力って本当に豊かです✨ 何の本で、どんな風に遊びやルールに取り入れられていたかを詳しく教えてください！";
+      } else {
+        return res.status(200).json({ skip: true });
+      }
+    } 
+    
+    // ーー STEP 4: 絵本の選択を広げるアプローチ（s5）の自由入力に対するラリー ーー
     else if (currentStep === 4) {
+      // 直前（ごっこ遊び）のユーザーのつぶやきへのクッション
+      const lastS4Reply = freeTexts ? (freeTexts.s4_deep || "") : "";
+      let s4Cushion = "お話を聞かせていただきありがとうございます！";
+      if (lastS4Reply) {
+        s4Cushion = `わあ、遊びの中にそんな素敵な反映の形（${lastS4Reply.slice(0, 10)}…）があったのですね！本の世界を自分なりに表現していてすごいです👏`;
+      }
+
       if (subStep === 0) {
-        aiQuestion = "今回取り組まれたそのアプローチについて、どうしてそれを選んだのですか？背景にある想いをぜひ教えてください😊";
+        // 選択肢でアプローチを選んだ直後
+        aiQuestion = `${s4Cushion}\n\n今回取り組まれたそのアプローチについて、どうしてそれを選んだのですか？背景にある想いをぜひ教えてください😊`;
       } else if (subStep === 1) {
+        // 「想い」をテキスト入力してもらった直後
         const s5Deep1Reply = freeTexts ? (freeTexts.s5_deep_1 || "") : "";
         aiQuestion = `「${s5Deep1Reply.slice(0, 15)}…」というあたたかい想い、ジーンときます。素晴らしい環境のデザインですね。\n\n結果的にお子さんはその本を読みましたか？読んだ場合、どんな反応だったかもぜひ教えてください！`;
       }
