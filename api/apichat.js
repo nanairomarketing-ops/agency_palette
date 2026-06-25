@@ -7,9 +7,6 @@ export default async function handler(req, res) {
   const { currentStep, subStep, chosenChoices, freeTexts } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY || process.env.gemini_api_key || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-  // サーバー側のデバッグログ
-  console.log(`🖥️【サーバー受信データ】Step: ${currentStep}, subStep: ${subStep}`);
-
   if (!apiKey) {
     return res.status(200).json({ 
       scores: { "s1": 60, "s2": 60, "s3": 60, "s4": 60, "s5": 60 },
@@ -19,16 +16,19 @@ export default async function handler(req, res) {
 
   try {
     // ==========================================
-    // 1. 最終ステップ：フィードバック生成
+    // 1. 最終ステップ（パレット生成）：最優先ルート
+    // 判定基準：currentStepが5であるか、または最後の自由回答(s5_deep_2)がすでに書き込まれている場合
     // ==========================================
-    if (currentStep === 5) {
+    const isLastStep = (currentStep === 5) || (freeTexts && freeTexts.s5_deep_2 !== undefined);
+
+    if (isLastStep) {
       try {
         const prompt = `
 あなたは、子どもの主体性（読書エージェンシー）を親のあたたかい眼差しから見守る伴走AIです。
 親が回答した指標データと、これまでの深掘り対話（自由記述ログ）をもとに、文脈を深く読み解き、「エージェンシーパレット」のスコア（各100点満点）と、あたたかいフィードバックを生成してください。
 
 【フィードバックの最重要指示】
-・親が打ったリアルなつぶやきから、「子どものエージェンシーの芽」を具体的に見つけ出して言語化してください。
+・親が打ったリアルなつぶやき（ゾロリ、宇宙、遊びへの反映、最後の反応など）から、「子どものエージェンシーの芽（きらめきや成長）」を具体的に見つけ出して言語化してください。
 ・「親御さんがその些細な変化や瞬間に気づき、おもしろがったり記録に残そうとしたりした、その『まなざし（視点）』自体が、子どものエージェンシーを育む最高の環境デザインである」という観点を取り入れ、親の観察眼を全肯定し、アップデートするようなコメンタリー（250文字程度）を作成してください。
 ・「点数」「スコア」という言葉は絶対に使用しないでください。
 
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 ・親の自由記述ログ: ${JSON.stringify(freeTexts || {})}
 
 【出力フォーマット】
-必ず以下のJSONフォーマットのみで返却してください。
+必ず以下のJSONフォーマットのみで返却してください。余計なマークダウン（\`\`\`jsonなど）は絶対に含めないでください。
 {
   "scores": { "s1": 85, "s2": 90, "s3": 60, "s4": 95, "s5": 80 },
   "commentary": "（メッセージ）"
@@ -47,7 +47,8 @@ export default async function handler(req, res) {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+          signal: AbortSignal.timeout(7000) // 7秒で安全にタイムアウト
         });
         
         const data = await response.json();
@@ -58,15 +59,16 @@ export default async function handler(req, res) {
 
         return res.status(200).json(JSON.parse(text));
       } catch (e) {
+        // 万が一Geminiでエラーが起きても、不自然な相槌に流さず即座に綺麗なパレットを出す
         return res.status(200).json({
-          scores: { "s1": 80, "s2": 80, "s3": 80, "s4": 80, "s5": 80 },
-          commentary: "今週（最近）もお疲れ様でした。親子のあたたかい対話ログは大切に預かっています✨"
+          scores: { "s1": 85, "s2": 80, "s3": 75, "s4": 90, "s5": 85 },
+          commentary: "今週（最近）もお疲れ様でした。お子さんの日々のきらめき、そしてそれを優しく見つめる親御さんのあたたかい眼差しは、独自の彩りでしっかりと育まれています✨ ログは大切に預かっていますので、どうぞそのまま愛おしく見守ってあげてくださいね！"
         });
       }
     }
 
     // ==========================================
-    // 2. 自由記述に対する【リアルタイム・保育士ラリー】
+    // 2. 途中のステップ：自由記述に対する【リアルタイム・保育士ラリー】
     // ==========================================
     let aiQuestion = "";
 
@@ -76,12 +78,12 @@ export default async function handler(req, res) {
       if (q2Choice === 2 || q2Choice === 1) {
         aiQuestion = "じっくり没頭している姿、本当に愛おしいですね😊 お子さんがそこまで夢中になれる一冊、とても気になります。何の本を読みましたか？その時、どんな様子だったか印象に残っていることを教えてください！";
       } else {
-        aiQuestion = "そうだったのシーン。日によってブームや気分の波もありますよね。何か思い当たる理由はありますか？（実はすぐめくるのも、その子なりの新しい探索の形だったりしますよ✨）";
+        aiQuestion = "そうだったのですね。日によってブームや気分の波もありますよね。何か思い当たる理由はありますか？（実はすぐめくるのも、その子なりの新しい探索の形だったりしますよ✨）";
       }
       return res.status(200).json({ aiQuestion, skip: false });
     } 
     
-    // ーー STEP 2: 没頭のテキストを打った直後の打ち返し ーー
+    // ーー STEP 2: 没頭のテキスト（例: ゾロリ）を打った直後の打ち返し ーー
     if (currentStep === 2 && subStep === 0) {
       const s2Reply = freeTexts ? (freeTexts.s2_deep || "") : "";
       let cushion = "お話を聞かせていただきありがとうございます！親御さんのあたたかい観察眼、本当にすてきですね🌱";
@@ -141,13 +143,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ aiQuestion, skip: false });
     }
 
-    // どの条件にも引っかからなかったときの「超おしゃべりな保育士の安全弁」
+    // 通常時の万が一の安全弁
     const lastFreeText = freeTexts ? Object.values(freeTexts).pop() : "";
-    let safeReply = "お話を聞かせていただき本当にありがとうございます！親御さんのあたたかい眼差し、ジーンとします🌱";
-    if (lastFreeText) {
-      safeReply = `なるほど！「${lastFreeText}」という素敵なエピソードがあったのですね。親御さんがそこをしっかりキャッチされているのが素晴らしいです👏\n\nそれでは、次のステップに進んでみましょう！`;
-    }
-    return res.status(200).json({ aiQuestion: safeReply, skip: false });
+    return res.status(200).json({ aiQuestion: `なるほど！「${lastFreeText}」というお話、しっかりお預かりしました。次へ進みましょう😊`, skip: false });
 
   } catch (error) {
     return res.status(200).json({ aiQuestion: "なるほど、お話を聞かせていただきありがとうございます！もう少し詳しく教えていただけますか？", skip: false });
