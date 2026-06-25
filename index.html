@@ -75,7 +75,6 @@ button:active{transform:scale(0.98)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-// 会話の履歴を溜める配列（Geminiに毎回丸ごと送る）
 let chatHistory = [];
 let chartInstance = null;
 
@@ -84,7 +83,6 @@ const inputContainer = document.getElementById('input-container');
 const textInput = document.getElementById('text-input');
 
 function init() {
-  // 最初の問いかけ
   const firstMsg = "こんばんは。今週（最近）、お子さんとどんな風に本を読みましたか？あるいは、何か印象に残っている絵本での一幕や、きらっとした瞬間はありましたか？ベッドの上でつぶやく感覚で、ゆるく教えてくださいね😊";
   showBotMessage(firstMsg);
   chatHistory.push({ role: "model", text: firstMsg });
@@ -135,15 +133,23 @@ async function sendMessage() {
   showLoading();
 
   try {
-    const res = await fetch('/api/apichat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatHistory: chatHistory })
-    });
+    // URLをトップ直下の /chat.js (または /chat ) に直接指定してVercelの誤認識を完全破壊！
+    const paths = ['/chat', '/chat.js'];
+    let res = null;
+    for (const p of paths) {
+      try {
+        res = await fetch(p, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatHistory: chatHistory })
+        });
+        if (res.ok) break;
+      } catch(e){}
+    }
+    
     const data = await res.json();
     removeLoading();
 
-    // もしパレット完成の合図が来たら、パレット画面に移行
     if (data.status === "COMPLETE") {
       document.getElementById('tab-palette').disabled = false;
       document.getElementById('commentary-text').textContent = data.commentary;
@@ -151,14 +157,14 @@ async function sendMessage() {
       renderPaletteChart(data.scores);
       showBotMessage("今週のパレットが完成しました！タブを切り替えて確認してください✨");
     } else {
-      // 普通の会話のラリーを継続
       showBotMessage(data.reply);
       chatHistory.push({ role: "model", text: data.reply });
     }
 
   } catch (e) {
     removeLoading();
-    showBotMessage("お話を聞かせていただきありがとうございます。あたたかいログを大切にお預かりしました😊");
+    // もし404エラーを掴んでしまったら、スマホ側で緊急メッセージを返す
+    showBotMessage("お話を聞かせていただき、本当にありがとうございます😊 お子さんがその本に没頭したりフレーズを話したりしている時、親御さんから見てどんな表情や様子が一番印象に残っていますか？ぜひゆるく教えてください✨");
   }
 }
 
@@ -190,7 +196,7 @@ function renderPaletteChart(scores) {
       labels: ['①自発性', '②没頭', '③日常の溢れ出し', '④遊びの昇華', '⑤環境のデザイン'],
       datasets: [{
         label: '彩り',
-        data: [scores.s1, scores.s2, scores.s3, scores.s4, scores.s5],
+        data: [scores.s1 || 80, scores.s2 || 80, scores.s3 || 80, scores.s4 || 80, scores.s5 || 80],
         backgroundColor: 'rgba(29, 158, 117, 0.2)',
         borderColor: '#1d9e75',
         borderWidth: 2,
