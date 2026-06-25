@@ -85,7 +85,7 @@ const FLOW = [
   { type: 'freetext', key: 's2_deep' },
   { type: 'choice', key: 's3', bot: '今週、読んだ本の言葉や場面が、日常会話の端々に溢れ出たりしましたか？', choices: [{t:'本のフレーズが時差でポロッと溢れ出た！',v:0},{t:'聞けば内容は覚えている程度',v:1},{t:'特に変化は見られなかった',v:2}] },
   { type: 'freetext', key: 's3_deep' },
-  { type: 'choice', key: 's4', bot: '今週、本の世界観をごっこ遊びやルールに昇華させていましたか？', choices: [{t:'自分流にアレンジしてごっこ遊びしていた！',v:0},{t:'セリフや場面をそのまま真真似て再現していた',v:1},{t:'遊びへの昇華は見られなかった',v:2}] },
+  { type: 'choice', key: 's4', bot: '今週、本の世界観をごっこ遊びやルールに昇華させていましたか？', choices: [{t:'自分流にアレンジしてごっこ遊びしていた！',v:0},{t:'セリフや場面をそのまま真似て再現していた',v:1},{t:'遊びへの昇華は見られなかった',v:2}] },
   { type: 'freetext', key: 's4_deep' },
   { type: 'choice', key: 's5', bot: '最後に、今週あなたご自身の「環境のデザイン（仕込み）」はいかがでしたか？', choices: [{t:'ブームを観察して、刺さりそうな本を置いておいた',v:4},{t:'ブームを観察して、刺さりそうな本を誘った',v:3},{t:'特に仕込みはしなかった',v:2},{t:'親の推薦図書を置いておいた',v:1},{t:'親の推薦図書を「読もう」と誘った',v:0}] },
   { type: 'freetext', key: 's5_deep_1' },
@@ -185,7 +185,6 @@ async function nextStep() {
   } else if (step.type === 'freetext') {
     showLoading();
     try {
-      // 途中の通信先URLを確実に「/api/apichat」に統一
       const res = await fetch('/api/apichat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,7 +242,6 @@ function handleKeyPress(e) {
 async function finishLayout() {
   showLoading();
   try {
-    // 最終処理の通信先URLも確実に「/api/apichat」に統一
     const res = await fetch('/api/apichat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
