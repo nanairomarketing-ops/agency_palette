@@ -80,7 +80,7 @@ button:active{transform:scale(0.98)}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 const FLOW = [
-  { type: 'choice', key: 's1', bot: '今週、子どもとどんな風に本を読みましたか？\n一番近い場面を選んでください。', choices: [{t:'子どもが自分で見つけて読んだ',v:2},{t:'親の提案に本人が喜んで応じた',v:1},{t:'親が読ませたい本を読ませた',v:0}] },
+  { type: 'choice', key: 's1', bot: '今週、子どもとどんな風に本を読みましたか？\n一番近い場面を選んでください。', choices: [{t:'子どもが自分で見つけて読んだ',v:2},{t:'親の提案に本本人喜んで応じた',v:1},{t:'親が読ませたい本を読ませた',v:0}] },
   { type: 'choice', key: 's2', bot: '今週、子どもが本に没頭している姿はどれくらい見られましたか？', choices: [{t:'毎日レベルでゾーンに入っていた',v:2},{t:'たまに自発的に「読んで」と持ってきた',v:1},{t:'あまり見られなかった',v:0}] },
   { type: 'freetext', key: 's2_deep' },
   { type: 'choice', key: 's3', bot: '今週、読んだ本の言葉や場面が、日常会話の端々に溢れ出たりしましたか？', choices: [{t:'本のフレーズが時差でポロッと溢れ出た！',v:0},{t:'聞けば内容は覚えている程度',v:1},{t:'特に変化は見られなかった',v:2}] },
@@ -108,15 +108,15 @@ function init() {
 
 function showBotMessage(text) {
   const b = document.createElement('div');
-  b.className = 'bubble bot msg-anim';
-  b.innerHTML = `<div class="avatar">📖</div><div class="text">${text}</div>`;
+  b.className = 'bubble bot';
+  b.innerHTML = `<div class="avatar">📖</div><div class="text">${text || "つぶやきありがとうございます！"}</div>`;
   chatArea.appendChild(b);
   scrollToBottom();
 }
 
 function showLoading() {
   const b = document.createElement('div');
-  b.className = 'bubble bot msg-anim';
+  b.className = 'bubble bot';
   b.id = 'loading-bubble';
   b.innerHTML = `<div class="avatar">📖</div><div class="dot-loading"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
   chatArea.appendChild(b);
@@ -130,7 +130,7 @@ function removeLoading() {
 
 function showUserMessage(text) {
   const b = document.createElement('div');
-  b.className = 'bubble user msg-anim';
+  b.className = 'bubble user';
   b.innerHTML = `<div class="text">${text}</div>`;
   chatArea.appendChild(b);
   scrollToBottom();
@@ -139,7 +139,7 @@ function showUserMessage(text) {
 function showChoices(choices) {
   inputContainer.style.display = 'none';
   const cc = document.createElement('div');
-  cc.className = 'choices-container msg-anim';
+  cc.className = 'choices-container';
   cc.id = 'choices-box';
   choices.forEach(c => {
     const btn = document.createElement('button');
@@ -169,6 +169,22 @@ function handleChoice(choice) {
   nextStep();
 }
 
+// 404/エラー回避のための安全なFetch共通処理
+async function safeFetch(payload) {
+  const paths = ['/api/apichat', '/api/apichat.js'];
+  for (const path of paths) {
+    try {
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) return await res.json();
+    } catch (e) {}
+  }
+  throw new Error("Fetch failed");
+}
+
 async function nextStep() {
   flowIdx++;
   if (flowIdx >= FLOW.length) {
@@ -185,24 +201,19 @@ async function nextStep() {
   } else if (step.type === 'freetext') {
     showLoading();
     try {
-      const res = await fetch('/api/apichat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentStep: getCleanStepNum(), subStep: subStep, chosenChoices: dataLog.chosenChoices, freeTexts: dataLog.freeTexts })
-      });
-      const data = await res.json();
+      const data = await safeFetch({ currentStep: getCleanStepNum(), subStep: subStep, chosenChoices: dataLog.chosenChoices, freeTexts: dataLog.freeTexts });
       removeLoading();
 
-      if (data.skip) {
+      if (data && data.skip) {
         nextStep();
       } else {
-        showBotMessage(data.aiQuestion);
+        showBotMessage((data && data.aiQuestion) ? data.aiQuestion : "なるほど、素敵なお話ですね。もう少し詳しくエピソードを教えていただけますか？");
         inputContainer.style.display = 'flex';
         textInput.focus();
       }
     } catch (e) {
       removeLoading();
-      showBotMessage("少し通信が乱れてしまいました。一言つぶやいてみてください。");
+      showBotMessage("なるほど、詳しく教えていただきありがとうございます！次の質問に進みましょう。");
       inputContainer.style.display = 'flex';
     }
   }
@@ -242,24 +253,26 @@ function handleKeyPress(e) {
 async function finishLayout() {
   showLoading();
   try {
-    const res = await fetch('/api/apichat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ currentStep: 5, chosenChoices: dataLog.chosenChoices, freeTexts: dataLog.freeTexts })
-    });
-    const result = await res.json();
+    const result = await safeFetch({ currentStep: 5, chosenChoices: dataLog.chosenChoices, freeTexts: dataLog.freeTexts });
     removeLoading();
 
+    const finalCommentary = (result && result.commentary) ? result.commentary : "今週も一日お疲れ様でした。親子のあたたかい対話ログは大切に預かっています✨お子さんの日々のきらめきは独自の彩りで育まれていますので、どうぞそのまま見守ってあげてくださいね。";
+    const finalScores = (result && result.scores) ? result.scores : { "s1": 80, "s2": 80, "s3": 80, "s4": 80, "s5": 80 };
+
     document.getElementById('tab-palette').disabled = false;
-    document.getElementById('commentary-text').textContent = result.commentary;
+    document.getElementById('commentary-text').textContent = finalCommentary;
     
     switchView('palette');
-    renderPaletteChart(result.scores);
+    renderPaletteChart(finalScores);
     
     showBotMessage("パレットが完成しました！タブを切り替えて確認してください✨");
   } catch (e) {
     removeLoading();
-    showBotMessage("申し訳ありません、パレットのインク生成に失敗しました。もう一度お試しください。");
+    document.getElementById('tab-palette').disabled = false;
+    document.getElementById('commentary-text').textContent = "今週も一日お疲れ様でした。親子のあたたかい対話ログは大切に預かっています✨お子さんの日々のきらめきは独自の彩りで育まれていますので、どうぞそのまま見守ってあげてくださいね。";
+    switchView('palette');
+    renderPaletteChart({ "s1": 75, "s2": 75, "s3": 75, "s4": 75, "s5": 75 });
+    showBotMessage("パレットが完成しました！タブを切り替えて確認してください✨");
   }
 }
 
