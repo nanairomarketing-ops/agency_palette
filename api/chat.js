@@ -8,7 +8,7 @@ function callGemini(apiKey, payload) {
     const body = JSON.stringify(payload);
     const options = {
       hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`,
+      path: `/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
