@@ -99,6 +99,7 @@ function buildPayload(history) {
     maxOutputTokens: 4096,
     thinkingConfig: {
     thinkingBudget: 0,
+    },
 
   };
 
