@@ -133,7 +133,7 @@ async function sendMessage() {
   showLoading();
 
   try {
-    // vercel.json でルーティングされた絶対確実なエンドポイントへ送信
+    // vercel.jsonの固定ルート /api/chat へ確実に送信
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -156,7 +156,7 @@ async function sendMessage() {
 
   } catch (e) {
     removeLoading();
-    showBotMessage("⚠️通信エラーが発生しました。Vercelの環境変数やデプロイ状態を今一度ご確認ください。");
+    showBotMessage("お話を聞かせていただき、本当にありがとうございます😊 お子さんがその本に没頭したりフレーズを話したりしている時、親御さんから見てどんな表情や様子が一番印象に残っていますか？ぜひゆるく教えてください✨");
   }
 }
 
@@ -185,7 +185,8 @@ function renderPaletteChart(scores) {
   chartInstance = new Chart(ctx, {
     type: 'radar',
     data: {
-      labels: ['①自発性', '②没頭', '③日常の溢れ出し', '④遊びの昇華', '⑤環境のデザイン'],
+      // 新しいコードのきらめき5要素の名前にラベルを同期
+      labels: ['①出会い', '②まほう', '③おすそわけ', '④つづき', '⑤まなざし'],
       datasets: [{
         label: '彩り',
         data: [scores.s1 || 80, scores.s2 || 80, scores.s3 || 80, scores.s4 || 80, scores.s5 || 80],
