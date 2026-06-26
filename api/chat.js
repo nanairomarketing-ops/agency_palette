@@ -98,7 +98,7 @@ function buildPayload(history) {
     temperature: 0.85,
     maxOutputTokens: 4096,
     thinkingConfig: {
-    thinkingBudget: 512,
+    thinkingBudget: 0,
 
   };
 
