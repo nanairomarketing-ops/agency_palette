@@ -96,7 +96,7 @@ function buildPayload(history) {
       required: ['status'],
     },
     temperature: 0.85,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 2048,
   };
 
   return {
